@@ -5,11 +5,18 @@ from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 from twisted.python import log
 
-# system imports
-import time, sys
+# SQLite
+import sqlite3
 
-def log(m):
-    print m;
+# system imports
+import sys, os.path
+from time import gmtime, strftime
+
+def log(m, c=""):
+    myfile = open("hints.log", "a")
+    myfile.write("# logged at "+strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " "+c+"\n")
+    myfile.write(m + "\n")
+    myfile.close()
 
 class BotIRCComponent(irc.IRCClient):
     def getNickname(self):
@@ -26,7 +33,7 @@ class BotIRCComponent(irc.IRCClient):
 	self.nickname = nick
 
     def getTarget(self, channel, nick):
-        return nick
+        return channel
 
     def connectionMade(self): #{{{
     	self.setNickname(self.getNickname())
@@ -52,6 +59,7 @@ class BotIRCComponent(irc.IRCClient):
         user = user.split('!', 1)[0]
         private = False
 	prefix = ""
+	origmsg = msg
 
         if channel == self.getNickname():
 	    private = True
@@ -79,18 +87,26 @@ class BotIRCComponent(irc.IRCClient):
             result = {
                 "!help": self.handle_HELP,
                 "!goto": self.handle_GOTO,
+                "!add": self.handle_ADD,
+                "!del": self.handle_DEL,
+                "!hint": self.handle_HINT,
+                "!list": self.handle_LIST,
             }[cmd](user, channel, cmd, msgparts, msg, private)
+	    log(origmsg, "User: %s, Channel: %s" % (user, channel));
         except KeyError:
 	    pass
 #}}}
 
     def handle_HELP(self, user, channel, cmd, cmdparts, msg, private): #{{{
-    	#FIXME
 	target = self.getTarget(channel, user)
 	self.sendLine("NOTICE %s :I am %s. Available commands:" % (target, self.getFullname()))
 
-	self.sendLine("NOTICE %s :  !help          : this help text" % (target))
-	self.sendLine("NOTICE %s :  !goto <chan>   : make me join channel <chan>" % (target))
+	self.sendLine("NOTICE %s :  !help               : this help text" % (target))
+	self.sendLine("NOTICE %s :  !goto <chan>        : make me join channel <chan>" % (target))
+	self.sendLine("NOTICE %s :  !add  <hint>        : add a hint" % (target))
+	self.sendLine("NOTICE %s :  !del  <id>          : delete hint with given id" % (target))
+	self.sendLine("NOTICE %s :  !hint <id|keywords> : show a random hint matching the id or keywords" % (target))
+	self.sendLine("NOTICE %s :  !list <keywords>    : list the hints with given keywords" % (target))
 #}}}
     def handle_GOTO(self, user, channel, cmd, cmdparts, msg, private): #{{{
 	target = self.getTarget(channel, user)
@@ -99,11 +115,62 @@ class BotIRCComponent(irc.IRCClient):
 	    self.join(msg)
 	
 #}}}
-    # FIXME extra commands:
-    #	addhint
-    #	delhint
-    #	hint <level>
-    #	allhints
+    def handle_ADD(self, user, channel, cmd, cmdparts, msg, private): #{{{
+	target = self.getTarget(channel, user)
+	if len(cmdparts) < 1:
+	    self.sendLine("NOTICE %s :The add command takes at least 1 argument" % (target))
+	else:
+	    hint = " ".join(cmdparts)
+	    hintid = self.factory.db_addHint(hint)
+	    self.sendLine("NOTICE %s :added hint id %d: %s" % (target, hintid, hint))
+	
+#}}}
+    def handle_DEL(self, user, channel, cmd, cmdparts, msg, private): #{{{
+	target = self.getTarget(channel, user)
+	if len(cmdparts) < 1 or not cmdparts[0].isdigit():
+	    self.sendLine("NOTICE %s :The add command takes 1 numeric argument" % (target))
+	else:
+	    hintid = int(cmdparts[0])
+	    (success, hint) = self.factory.db_getHint(hintid)
+	    if success:
+		self.factory.db_delHint(hintid)
+		self.sendLine("NOTICE %s :removed hint %d: %s" % (target, hintid, hint))
+	    else:
+		self.sendLine("NOTICE %s :hint %d doesn't exist" % (target, hintid))
+	
+#}}}
+    def handle_HINT(self, user, channel, cmd, cmdparts, msg, private): #{{{
+	target = self.getTarget(channel, user)
+	if len(cmdparts) < 1:
+	    key = []
+	else:
+	    key = cmdparts
+
+        if len(key) == 1 and key[0].isdigit():
+	    (success, hint) = self.factory.db_getHint(int(key[0]))
+	else:
+	    (success, hintid, hint) = self.factory.db_getRandomHint(key)
+
+	if success:
+	    self.sendLine("NOTICE %s :Hint(%d): %s" % (target, hintid, hint))
+	else:
+	    self.sendLine("NOTICE %s :no hints found" % (target))
+	
+#}}}
+    def handle_LIST(self, user, channel, cmd, cmdparts, msg, private): #{{{
+	target = self.getTarget(channel, user)
+	if len(cmdparts) < 1:
+	    key = []
+	else:
+	    key = cmdparts
+
+	(success, hintids) = self.factory.db_getAllHints(key)
+	if success:
+	    self.sendLine("NOTICE %s :Hint IDs: %s" % (target, ",".join([str(x) for x in hintids])))
+	else:
+	    self.sendLine("NOTICE %s :no hints found" % (target))
+	
+#}}}
 
 class BotIRCComponentFactory(protocol.ClientFactory):
     protocol = BotIRCComponent
@@ -112,6 +179,8 @@ class BotIRCComponentFactory(protocol.ClientFactory):
         self.nickname = nick
         self.basenickname = nick
         self.fullname = fullname
+	# if the db file doesn't exist, create it
+	self.db_init("hints.db")
 # }}}
     def clientConnectionLost(self, connector, reason): #{{{
         """If we get disconnected, reconnect to server."""
@@ -121,6 +190,64 @@ class BotIRCComponentFactory(protocol.ClientFactory):
         print "connection failed:", reason
         reactor.stop()
 #}}}
+    def db_init(self, fn): #{{{
+	if os.path.exists(fn):
+	    self.db = sqlite3.connect(fn)
+	else:
+	    self.db = sqlite3.connect(fn)
+	    cu = self.db.cursor()
+	    cu.execute("create table hints (hint varchar)")
+	    self.db.commit()
+    #}}}
+    def db_addHint(self, hint): #{{{
+	cu = self.db.cursor()
+	cu.execute("insert into hints values(?)", (hint,))
+	log("# Added hint %d" % cu.lastrowid)
+	self.db.commit()
+	return cu.lastrowid
+    #}}}
+    def db_delHint(self, hintid): #{{{
+	cu = self.db.cursor()
+	cu.execute("delete from hints where rowid=%d" % hintid)
+	log("# Deleted hint %d" % hintid)
+	self.db.commit()
+    #}}}
+    def db_getHint(self, hintid): #{{{
+	cu = self.db.cursor()
+	cu.execute("select hint from hints where rowid=%d" % hintid)
+	row = cu.fetchone()
+	if row:
+	    hint = str(row[0])
+	    log("# Getting hint %d: %s" % (hintid, hint))
+	    return (True, hint)
+	else:
+	    return (False, 0)
+    #}}}
+    def db_getAllHints(self, keys=[]): #{{{
+	cu = self.db.cursor()
+	key = "%" + "%".join(keys) + "%"
+	cu.execute("select rowid from hints where hint like ?", (key,))
+	rows = cu.fetchall()
+	if rows:
+	    hintids = [int(x[0]) for x in rows]
+	    log("# Getting all hint ids for [%s]: %s" % (key, ",".join([str(x) for x in hintids])))
+	    return (True, hintids)
+	else:
+	    return (False, [])
+    #}}}
+    def db_getRandomHint(self, keys=[]): #{{{
+	cu = self.db.cursor()
+	key = "%" + "%".join(keys) + "%"
+	cu.execute("select rowid, hint from hints where hint like ? order by random() limit 1", (key,))
+	row = cu.fetchone()
+	if row:
+	    hintid = int(row[0])
+	    hint = str(row[1])
+	    log("# Getting random hint for %s: [%d] %s" % (key, hintid, hint))
+	    return (True, hintid, hint)
+	else:
+	    return (False, 0, 0)
+    #}}}
 
 
 if __name__ == '__main__':
