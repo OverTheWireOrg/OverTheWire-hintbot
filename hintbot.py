@@ -72,12 +72,12 @@ class BotIRCComponent(irc.IRCClient):
 
 	msg = msg.strip()
 	msgparts = msg.split(" ")
-	if len(msgparts) < 1:
+	if not msgparts:
 	    return
 
 	cmd = msgparts[0]
 
-	if len(msgparts) > 1:
+	if msgparts:
 	    msg = " ".join(msgparts[1:])
 	    msgparts = msgparts[1:]
 	else:
@@ -123,7 +123,7 @@ class BotIRCComponent(irc.IRCClient):
 #}}}
     def handle_ADD(self, user, channel, cmd, cmdparts, msg, private): #{{{
 	target = self.getTarget(channel, user)
-	if len(cmdparts) < 1:
+	if not cmdparts:
 	    self.sendLine("NOTICE %s :The add command takes at least 1 argument" % (target))
 	else:
 	    hint = " ".join(cmdparts)
@@ -133,7 +133,7 @@ class BotIRCComponent(irc.IRCClient):
 #}}}
     def handle_DEL(self, user, channel, cmd, cmdparts, msg, private): #{{{
 	target = self.getTarget(channel, user)
-	if len(cmdparts) < 1 or not cmdparts[0].isdigit():
+	if not cmdparts or not cmdparts[0].isdigit():
 	    self.sendLine("NOTICE %s :The add command takes 1 numeric argument" % (target))
 	else:
 	    hintid = int(cmdparts[0])
@@ -147,9 +147,8 @@ class BotIRCComponent(irc.IRCClient):
 #}}}
     def handle_HINT(self, user, channel, cmd, cmdparts, msg, private): #{{{
 	target = self.getTarget(channel, user)
-	if len(cmdparts) < 1:
-	    key = []
-	else:
+	key = []
+	if cmdparts:
 	    key = cmdparts
 
         if len(key) == 1 and key[0].isdigit():
@@ -166,9 +165,8 @@ class BotIRCComponent(irc.IRCClient):
 #}}}
     def handle_LIST(self, user, channel, cmd, cmdparts, msg, private): #{{{
 	target = self.getTarget(channel, user)
-	if len(cmdparts) < 1:
-	    key = []
-	else:
+	key = []
+	if cmdparts:
 	    key = cmdparts
 
 	(success, hintids) = self.factory.db_getAllHints(key)
@@ -227,9 +225,9 @@ class BotIRCComponentFactory(protocol.ClientFactory):
 	if row:
 	    hint = str(row[0])
 	    log("# Getting hint %d: %s" % (hintid, hint))
-	    return (True, hint)
+	    return True, hint
 	else:
-	    return (False, 0)
+	    return False, 0
     #}}}
     def db_getAllHints(self, keys=[]): #{{{
 	cu = self.db.cursor()
@@ -239,9 +237,9 @@ class BotIRCComponentFactory(protocol.ClientFactory):
 	if rows:
 	    hintids = [int(x[0]) for x in rows]
 	    log("# Getting all hint ids for [%s]: %s" % (key, ",".join([str(x) for x in hintids])))
-	    return (True, hintids)
+	    return True, hintids
 	else:
-	    return (False, [])
+	    return False, []
     #}}}
     def db_getRandomHint(self, keys=[]): #{{{
 	cu = self.db.cursor()
@@ -252,9 +250,9 @@ class BotIRCComponentFactory(protocol.ClientFactory):
 	    hintid = int(row[0])
 	    hint = str(row[1])
 	    log("# Getting random hint for %s: [%d] %s" % (key, hintid, hint))
-	    return (True, hintid, hint)
+	    return True, hintid, hint
 	else:
-	    return (False, 0, 0)
+	    return False, 0, 0
     #}}}
 
 
