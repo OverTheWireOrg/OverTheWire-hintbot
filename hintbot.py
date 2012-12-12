@@ -14,9 +14,12 @@ from time import gmtime, strftime
 
 def log(m, c=""):
     myfile = open("hints.log", "a")
-    myfile.write("# logged at "+strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " "+c+"\n")
+    mc = "# logged at "+strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " "+c
+    myfile.write(mc+"\n")
     myfile.write(m + "\n")
     myfile.close()
+    print(mc)
+    print(m)
 
 class BotIRCComponent(irc.IRCClient):
     def getNickname(self):
@@ -24,6 +27,9 @@ class BotIRCComponent(irc.IRCClient):
 
     def getFullname(self):
         return self.factory.fullname
+
+    def getContributionURL(self):
+        return self.factory.contriburl
 
     def getBaseNickname(self):
         return self.factory.basenickname
@@ -44,7 +50,7 @@ class BotIRCComponent(irc.IRCClient):
         self.join(self.factory.channel)
 #}}}
     def joined(self, channel): #{{{
-	self.sendLine("PRIVMSG %s :I am %s. Type !hint <levelname> for a hint or !help for help." % (channel, self.getFullname()))
+	self.sendLine("PRIVMSG %s :I am %s. Type !hint <keyword> for a hint or !help for help." % (channel, self.getFullname()))
 #}}}
     def alterCollidedNick(self, nickname): #{{{
         """
@@ -86,7 +92,7 @@ class BotIRCComponent(irc.IRCClient):
         try:
             result = {
                 "!help": self.handle_HELP,
-                "!goto": self.handle_GOTO,
+                #"!goto": self.handle_GOTO,
                 "!add": self.handle_ADD,
                 "!del": self.handle_DEL,
                 "!hint": self.handle_HINT,
@@ -99,10 +105,10 @@ class BotIRCComponent(irc.IRCClient):
 
     def handle_HELP(self, user, channel, cmd, cmdparts, msg, private): #{{{
 	target = self.getTarget(channel, user)
-	self.sendLine("NOTICE %s :I am %s. Available commands:" % (target, self.getFullname()))
+	self.sendLine("NOTICE %s :I am %s from %s. Available commands:" % (target, self.getFullname(), self.getContributionURL()))
 
 	self.sendLine("NOTICE %s :  !help               : this help text" % (target))
-	self.sendLine("NOTICE %s :  !goto <chan>        : make me join channel <chan>" % (target))
+	#self.sendLine("NOTICE %s :  !goto <chan>        : make me join channel <chan>" % (target))
 	self.sendLine("NOTICE %s :  !add  <hint>        : add a hint" % (target))
 	self.sendLine("NOTICE %s :  !del  <id>          : delete hint with given id" % (target))
 	self.sendLine("NOTICE %s :  !hint <id|keywords> : show a random hint matching the id or keywords" % (target))
@@ -174,11 +180,12 @@ class BotIRCComponent(irc.IRCClient):
 
 class BotIRCComponentFactory(protocol.ClientFactory):
     protocol = BotIRCComponent
-    def __init__(self, channel, nick, fullname): #{{{
+    def __init__(self, channel, nick, fullname, url): #{{{
         self.channel = channel
         self.nickname = nick
         self.basenickname = nick
         self.fullname = fullname
+        self.contriburl = url
 	# if the db file doesn't exist, create it
 	self.db_init("hints.db")
 # }}}
@@ -252,10 +259,10 @@ class BotIRCComponentFactory(protocol.ClientFactory):
 
 if __name__ == '__main__':
     # create factory protocol and application
-    f = BotIRCComponentFactory("x", "hintbot", "the Wargames Hintbot")
+    f = BotIRCComponentFactory("wargames", "HintBot", "the Wargames Hintbot v0.1", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
 
     # connect factory to this host and port
-    reactor.connectTCP("localhost", 6667, f)
+    reactor.connectTCP("irc.overthewire.org", 6667, f)
 
     # run bot
     reactor.run()
