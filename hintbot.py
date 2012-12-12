@@ -17,7 +17,8 @@ def log(m, c=""):
     	mc = "# logged at " + strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " " + c
     	f.write(mc + "\n")
     	f.write(m + "\n")
-    print(mc + m)
+    print(mc)
+    print(m)
 
 class BotIRCComponent(irc.IRCClient):
     def getNickname(self):
