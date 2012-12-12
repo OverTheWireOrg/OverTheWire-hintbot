@@ -13,7 +13,7 @@ import sys, os.path
 from time import gmtime, strftime
 
 def log(m, c=""):
-	with open("hints.log", "a") as f:
+    with open("hints.log", "a") as f:
     	mc = "# logged at " + strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " " + c
     	f.write(mc + "\n")
     	f.write(m + "\n")
