@@ -1,0 +1,10 @@
+The task of the Wargames Hint Bot is to provide hints for wargame levels,
+but since it was designed as a database to store, retrieve and query strings,
+it can have other uses as well.
+
+Commands:
+    !help
+    !hint
+    !add
+    !del
+    !list
