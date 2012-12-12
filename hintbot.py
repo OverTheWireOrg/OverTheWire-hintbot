@@ -13,13 +13,11 @@ import sys, os.path
 from time import gmtime, strftime
 
 def log(m, c=""):
-    myfile = open("hints.log", "a")
-    mc = "# logged at "+strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " "+c
-    myfile.write(mc+"\n")
-    myfile.write(m + "\n")
-    myfile.close()
-    print(mc)
-    print(m)
+	with open("hints.log", "a") as f:
+    	mc = "# logged at " + strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " " + c
+    	f.write(mc + "\n")
+    	f.write(m + "\n")
+    print(mc + m)
 
 class BotIRCComponent(irc.IRCClient):
     def getNickname(self):
