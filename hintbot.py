@@ -153,7 +153,8 @@ class BotIRCComponent(irc.IRCClient):
 	    key = cmdparts
 
         if len(key) == 1 and key[0].isdigit():
-	    (success, hint) = self.factory.db_getHint(int(key[0]))
+	    hintid = int(key[0])
+	    (success, hint) = self.factory.db_getHint(hintid)
 	else:
 	    (success, hintid, hint) = self.factory.db_getRandomHint(key)
 
