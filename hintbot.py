@@ -21,6 +21,65 @@ def log(m, c=""):
     print(m)
 
 class BotIRCComponent(irc.IRCClient):
+    DontCheckARGC = -1
+    commandData = {}
+    commands = {}
+
+    def __init__(self):
+	self.commandData = {
+	    "!help": { 
+	    	"fn": self.handle_HELP, 
+		"argc": 0, 
+		"tillEnd": False,
+		"help": "this help text",
+	    },
+	    "!goto": { 
+	    	"fn": self.handle_GOTO, 
+		"argc": 1, 
+		"tillEnd": False,
+		"help": "go to the given channel",
+	    },
+	    "!add": { 
+	    	"fn": self.handle_ADD, 
+		"argc": 1, 
+		"tillEnd": True,
+		"help": "add a hint",
+	    },
+	    "!del": { 
+	    	"fn": self.handle_DEL, 
+		"argc": 1, 
+		"tillEnd": True,
+		"help": "delete a hint by ID",
+	    },
+	    "!list": { 
+	    	"fn": self.handle_LIST, 
+		"argc": self.DontCheckARGC, 
+		"tillEnd": True,
+		"help": "list all hints matching the given keywords",
+	    },
+	    "!hint": { 
+	    	"fn": self.handle_HINT, 
+		"argc": self.DontCheckARGC, 
+		"tillEnd": True,
+		"help": "get a random hint matching the given ID or keywords",
+	    },
+	}
+
+	self.commands = {
+	    # only in direct user message, first word is the command
+	    "private": ["!help", "!add", "!del", "!list", "!hint"],
+	    # only in channels, first word must be the command
+	    "public": ["!help", "!add", "!del", "!list", "!hint"],
+	    # only in channels, first word is the name of this bot followed by a colon, second word is the command
+	    "directed": ["!help", "!add", "!del", "!list", "!hint"],
+	}
+
+    def getCommandRecords(self, msgtype):
+        out = {}
+	for c in self.commands[msgtype]:
+	    out[c] = self.commandData[c]
+	return out
+
     def getNickname(self):
         return self.factory.nickname
 
@@ -37,8 +96,16 @@ class BotIRCComponent(irc.IRCClient):
         self.factory.nickname = nick
 	self.nickname = nick
 
-    def getTarget(self, channel, nick):
-        return channel
+    def getReplyTarget(self, msgtype, user, channel):
+        return {
+	    "public": channel,
+	    "directed": channel,
+	    "private": user
+	}[msgtype]
+
+    def sendMessage(self, msgtype, user, channel, msg):
+        prefix = user+": " if msgtype == "directed" else ""
+	self.sendLine("PRIVMSG %s :%s%s" % (self.getReplyTarget(msgtype, user, channel), prefix, msg))
 
     def connectionMade(self): #{{{
     	self.setNickname(self.getNickname())
@@ -62,93 +129,103 @@ class BotIRCComponent(irc.IRCClient):
     def privmsg(self, user, channel, msg): #{{{
         """This will get called when the bot receives a message."""
         user = user.split('!', 1)[0]
-        private = False
-	prefix = ""
 	origmsg = msg
+	error = ""
 
-        if channel == self.getNickname():
-	    private = True
+	# determine the type of command, select the correct set of handlers
+	# and, in case of a directed message, strip of this bot's nickname
+        if channel == self.getNickname(): 
+	    # private message
+	    msgtype = "private"
+	else:
+	    # check if directed at this nickname
+	    key = self.getNickname() + ":"
+	    keylen = len(key)
+	    if msg.startswith(key):
+	        msgtype = "directed"
+	        msg = msg[keylen:]
+	    else:
+	        msgtype = "public"
+	recset = self.getCommandRecords(msgtype)
+	    	
+	# split into words, words[0] contains the command if it exists
+	words = msg.split()
 
-	msg = msg.strip()
-	msgparts = msg.split(" ")
-	if not msgparts:
+	if len(words):
+	    cmd = words[0]
+	    if cmd in recset:
+		rec = recset[cmd]
+		c = rec["argc"]
+		if c == self.DontCheckARGC:
+		    words = msg.split(None)
+		else:
+		    if len(words) >= (c+1):
+			words = msg.split(None, c if rec["tillEnd"] else c+1)[:(c+1)]
+		    else:
+			error = "Not enough parameters: expecting %d, received %d" % (c, len(words) - 1)
+	    else:
+	        if msgtype == "public":
+		    return
+		error = "Unknown command %s" % (cmd)
+	else:
+	    if msgtype == "public":
+		return
+	    error = "What is it? Use !help if you're confused..."
+
+	if error:
+	    self.sendMessage(msgtype, user, channel, error)
+	    print "Error msgtype=%s: [%s]" % (msgtype, error)
 	    return
-
-	cmd = msgparts[0]
-
-	if msgparts:
-	    msg = " ".join(msgparts[1:])
-	    msgparts = msgparts[1:]
-	else:
-	    msg = ""
-	    msgparts = []
-
-	# private = whether this message was sent to a channel or not
-	# cmd = command given
-	# msgparts = array of words after the cmd
-	# msg = msgparts joined to a string
-
-        try:
-            result = {
-                "!help": self.handle_HELP,
-                #"!goto": self.handle_GOTO,
-                "!add": self.handle_ADD,
-                "!del": self.handle_DEL,
-                "!hint": self.handle_HINT,
-                "!list": self.handle_LIST,
-            }[cmd](user, channel, cmd, msgparts, msg, private)
-	    log(origmsg, "User: %s, Channel: %s" % (user, channel));
-        except KeyError:
-	    pass
+	    
+	rec["fn"](msgtype, user, channel, *(words))
+	log(origmsg, "User: %s, Recip: %s, Target: %s" % (user, channel, self.getReplyTarget(msgtype, user, channel)));
 #}}}
 
-    def handle_HELP(self, user, channel, cmd, cmdparts, msg, private): #{{{
-	target = self.getTarget(channel, user)
-	self.sendLine("NOTICE %s :I am %s from %s. Available commands:" % (target, self.getFullname(), self.getContributionURL()))
+    def handle_HELP(self, msgtype, user, recip, cmd): #{{{
+	self.sendMessage(msgtype, user, recip, "I am %s from %s. Available commands (m=message, c=channel, d=directed):" % (self.getFullname(), self.getContributionURL()))
+	cmds = self.commandData.keys()
+	cmds.sort()
+	for k in cmds:
+	    prefix = "["
+	    prefix += "m" if k in self.commands["private"] else "-"
+	    prefix += "c" if k in self.commands["public"] else "-"
+	    prefix += "d" if k in self.commands["directed"] else "-"
+	    prefix += "]"
 
-	self.sendLine("NOTICE %s :  !help               : this help text" % (target))
-	#self.sendLine("NOTICE %s :  !goto <chan>        : make me join channel <chan>" % (target))
-	self.sendLine("NOTICE %s :  !add  <hint>        : add a hint" % (target))
-	self.sendLine("NOTICE %s :  !del  <id>          : delete hint with given id" % (target))
-	self.sendLine("NOTICE %s :  !hint <id|keywords> : show a random hint matching the id or keywords" % (target))
-	self.sendLine("NOTICE %s :  !list <keywords>    : list the hints with given keywords" % (target))
+	    helptext = self.commandData[k]["help"]
+	    c = self.commandData[k]["argc"]
+	    if c == self.DontCheckARGC:
+	        args = "..."
+	    else:
+		args = " ".join(["<%s>" % chr(x+ord('a')) for x in range(0,c)])
+
+	    self.sendMessage(msgtype, user, recip, "  %s %10s %-10s : %s" % (prefix, k,args, helptext))
 #}}}
-    def handle_GOTO(self, user, channel, cmd, cmdparts, msg, private): #{{{
-	target = self.getTarget(channel, user)
-	if msg.startswith("#"):
-	    self.sendLine("NOTICE %s :joining %s" % (target, msg))
-	    self.join(msg)
-	
+    def handle_GOTO(self, msgtype, user, recip, cmd, newchan): #{{{
+	if newchan.startswith("#"):
+	    self.sendMessage(msgtype, user, recip, "joining %s" % newchan)
+	    self.join(newchan)
 #}}}
-    def handle_ADD(self, user, channel, cmd, cmdparts, msg, private): #{{{
-	target = self.getTarget(channel, user)
-	if not cmdparts:
-	    self.sendLine("NOTICE %s :The add command takes at least 1 argument" % (target))
-	else:
-	    hint = " ".join(cmdparts)
+    def handle_ADD(self, msgtype, user, recip, cmd, hint): #{{{
 	    hintid = self.factory.db_addHint(hint)
-	    self.sendLine("NOTICE %s :added hint id %d: %s" % (target, hintid, hint))
+	    self.sendMessage(msgtype, user, recip, "added hint id %d: %s" % (hintid, hint))
 	
 #}}}
-    def handle_DEL(self, user, channel, cmd, cmdparts, msg, private): #{{{
-	target = self.getTarget(channel, user)
-	if not cmdparts or not cmdparts[0].isdigit():
-	    self.sendLine("NOTICE %s :The add command takes 1 numeric argument" % (target))
+    def handle_DEL(self, msgtype, user, recip, cmd, hintid): #{{{
+	if not hintid.isdigit():
+	    self.sendMessage(msgtype, user, recip, "The add command takes 1 numeric argument")
 	else:
-	    hintid = int(cmdparts[0])
+	    hintid = int(hintid)
 	    (success, hint) = self.factory.db_getHint(hintid)
 	    if success:
 		self.factory.db_delHint(hintid)
-		self.sendLine("NOTICE %s :removed hint %d: %s" % (target, hintid, hint))
+		self.sendMessage(msgtype, user, recip, "removed hint %d: %s" % (hintid, hint))
 	    else:
-		self.sendLine("NOTICE %s :hint %d doesn't exist" % (target, hintid))
+		self.sendMessage(msgtype, user, recip, "hint %d doesn't exist" % (hintid))
 	
 #}}}
-    def handle_HINT(self, user, channel, cmd, cmdparts, msg, private): #{{{
-	target = self.getTarget(channel, user)
-	key = []
-	if cmdparts:
-	    key = cmdparts
+    def handle_HINT(self, msgtype, user, recip, cmd, keymsg=""): #{{{
+	key = keymsg.split()
 
         if len(key) == 1 and key[0].isdigit():
 	    hintid = int(key[0])
@@ -157,22 +234,19 @@ class BotIRCComponent(irc.IRCClient):
 	    (success, hintid, hint) = self.factory.db_getRandomHint(key)
 
 	if success:
-	    self.sendLine("NOTICE %s :Hint(%d): %s" % (target, hintid, hint))
+	    self.sendMessage(msgtype, user, recip, "Hint(%d): %s" % (hintid, hint))
 	else:
-	    self.sendLine("NOTICE %s :no hints found" % (target))
+	    self.sendMessage(msgtype, user, recip, "no hints found")
 	
 #}}}
-    def handle_LIST(self, user, channel, cmd, cmdparts, msg, private): #{{{
-	target = self.getTarget(channel, user)
-	key = []
-	if cmdparts:
-	    key = cmdparts
+    def handle_LIST(self, msgtype, user, recip, cmd, keymsg=""): #{{{
+	key = keymsg.split()
 
 	(success, hintids) = self.factory.db_getAllHints(key)
 	if success:
-	    self.sendLine("NOTICE %s :Hint IDs: %s" % (target, ",".join([str(x) for x in hintids])))
+	    self.sendMessage(msgtype, user, recip, "Hint IDs: %s" % (",".join([str(x) for x in hintids])))
 	else:
-	    self.sendLine("NOTICE %s :no hints found" % (target))
+	    self.sendMessage(msgtype, user, recip, "no hints found")
 	
 #}}}
 
@@ -257,7 +331,7 @@ class BotIRCComponentFactory(protocol.ClientFactory):
 
 if __name__ == '__main__':
     # create factory protocol and application
-    f = BotIRCComponentFactory("wargames", "HintBot", "the Wargames Hintbot v0.1", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
+    f = BotIRCComponentFactory("wargames", "HintBot", "the Wargames Hintbot v0.2", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
 
     # connect factory to this host and port
     reactor.connectTCP("irc.overthewire.org", 6667, f)
