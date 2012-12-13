@@ -112,6 +112,9 @@ class HintBot(GenericIRCBot):
 	
 #}}}
 
+    def joined(self, channel):
+        pass
+
 class HintBotFactory(GenericIRCBotFactory):
     def __init__(self, proto, channel, nick, fullname, url): #{{{
         GenericIRCBotFactory.__init__(self, proto, channel, nick, fullname, url)
