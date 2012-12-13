@@ -180,7 +180,7 @@ class HintBotFactory(GenericIRCBotFactory):
 
 if __name__ == '__main__':
     # create factory protocol and application
-    f = HintBotFactory(HintBot, "wargames", "HintBot", "the Wargames Hintbot v0.2", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
+    f = HintBotFactory(HintBot, "wargames", "HintBot", "the Wargames Hintbot v0.3", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
 
     # connect factory to this host and port
     reactor.connectTCP("irc.overthewire.org", 6667, f)
