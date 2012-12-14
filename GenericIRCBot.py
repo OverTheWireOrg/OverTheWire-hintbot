@@ -6,6 +6,7 @@ from twisted.internet import reactor, protocol
 
 # system imports
 from time import gmtime, strftime
+from random import randint
 
 def log(m, c=""):
     with open("vulnbot.log", "a") as f:
