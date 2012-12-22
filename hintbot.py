@@ -119,7 +119,7 @@ class HintBotFactory(GenericIRCBotFactory):
     def __init__(self, proto, channel, nick, fullname, url): #{{{
         GenericIRCBotFactory.__init__(self, proto, channel, nick, fullname, url)
 	# if the db file doesn't exist, create it
-	self.db_init("/vulnbot/hintbot/hints.db")
+	self.db_init("hints.db")
 # }}}
     def db_init(self, fn): #{{{
 	if os.path.exists(fn):
