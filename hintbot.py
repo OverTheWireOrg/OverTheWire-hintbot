@@ -119,7 +119,7 @@ class HintBotFactory(GenericIRCBotFactory):
     def __init__(self, proto, channel, nick, fullname, url): #{{{
         GenericIRCBotFactory.__init__(self, proto, channel, nick, fullname, url)
 	# if the db file doesn't exist, create it
-	self.db_init("hints.db")
+	self.db_init("/vulnbot/hintbot/hints.db")
 # }}}
     def db_init(self, fn): #{{{
 	if os.path.exists(fn):
@@ -183,7 +183,7 @@ class HintBotFactory(GenericIRCBotFactory):
 
 if __name__ == '__main__':
     # create factory protocol and application
-    f = HintBotFactory(HintBot, "wargames", "HintBot", "the Wargames Hintbot v0.3", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
+    f = HintBotFactory(HintBot, ["#wargames"], "HintBot", "Hintbot", "http://www.overthewire.org/wargames/vulnbot/")
 
     # connect factory to this host and port
     reactor.connectTCP("irc.overthewire.org", 6667, f)

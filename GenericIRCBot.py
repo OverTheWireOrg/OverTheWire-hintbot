@@ -9,12 +9,13 @@ from time import gmtime, strftime
 from random import randint
 
 def log(m, c=""):
-    with open("vulnbot.log", "a") as f:
-    	mc = "# logged at " + strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " " + c
-    	f.write(mc + "\n")
-    	f.write(m + "\n")
-    print(mc)
-    print(m)
+    pass
+    #with open("vulnbot.log", "a") as f:
+    #	mc = "# logged at " + strftime("%Y-%m-%d %H:%M:%S", gmtime()) + " " + c
+    #	f.write(mc + "\n")
+    #	f.write(m + "\n")
+    #print(mc)
+    #print(m)
 
 class GenericIRCBot(irc.IRCClient):
     DontCheckARGC = -1
@@ -37,8 +38,8 @@ class GenericIRCBot(irc.IRCClient):
     def getFullname(self):
         return self.factory.fullname
 
-    def getContributionURL(self):
-        return self.factory.contriburl
+    def getURL(self):
+        return self.factory.url
 
     def getBaseNickname(self):
         return self.factory.basenickname
@@ -64,10 +65,7 @@ class GenericIRCBot(irc.IRCClient):
 #}}}
     def signedOn(self): #{{{
         """Called when bot has succesfully signed on to server."""
-        self.join(self.factory.channel)
-#}}}
-    def joined(self, channel): #{{{
-	self.sendLine("PRIVMSG %s :I am %s. Type !hint <keyword> for a hint or !help for help." % (channel, self.getFullname()))
+	[self.join(x) for x in self.factory.channels]
 #}}}
     def alterCollidedNick(self, nickname): #{{{
         """
@@ -133,7 +131,7 @@ class GenericIRCBot(irc.IRCClient):
 #}}}
 
     def handle_HELP(self, msgtype, user, recip, cmd): #{{{
-	self.sendMessage(msgtype, user, recip, "I am %s from %s. Available commands (m=message, c=channel, d=directed):" % (self.getFullname(), self.getContributionURL()))
+	self.sendMessage(msgtype, user, recip, "I am %s from %s. Available commands (m=message, c=channel, d=directed):" % (self.getFullname(), self.getURL()))
 	cmds = self.commandData.keys()
 	cmds.sort()
 	for k in cmds:
@@ -154,13 +152,13 @@ class GenericIRCBot(irc.IRCClient):
 
 
 class GenericIRCBotFactory(protocol.ClientFactory):
-    def __init__(self, proto, channel, nick, fullname, url): #{{{
+    def __init__(self, proto, channels, nick, fullname, url): #{{{
         self.protocol = proto
-        self.channel = channel
+        self.channels = channels
         self.nickname = nick
         self.basenickname = nick
         self.fullname = fullname
-        self.contriburl = url
+        self.url = url
 # }}}
     def clientConnectionLost(self, connector, reason): #{{{
         """If we get disconnected, reconnect to server."""
