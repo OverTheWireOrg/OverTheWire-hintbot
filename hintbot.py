@@ -56,7 +56,8 @@ class HintBot(GenericIRCBot):
 
 	self.commands = {
 	    # only in direct user message, first word is the command
-	    "private": ["!help", "!add", "!del", "!list", "!hint"],
+            # dont allow !hint here. at least a little bit of public shaming.
+	    "private": ["!help", "!add", "!del", "!list"],
 	    # only in channels, first word must be the command
 	    "public": ["!help", "!add", "!del", "!list", "!hint"],
 	    # only in channels, first word is the name of this bot followed by a colon, second word is the command
