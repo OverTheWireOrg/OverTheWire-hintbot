@@ -97,7 +97,9 @@ class HintBot(GenericIRCBot):
 	    (success, hintid, hint) = self.factory.db_getRandomHint(key)
 
 	if success:
-	    self.sendMessage(msgtype, user, recip, "Hint(%d): %s" % (hintid, hint))
+            # allways reply in pm to prevent spoilers in the channel
+	    self.sendMessage(msgtype, user, recip, "hint sent in pm")
+	    self.sendMessage("private", user, recip, "Hint(%d): %s" % (hintid, hint))
 	else:
 	    self.sendMessage(msgtype, user, recip, "no hints found")
 	
