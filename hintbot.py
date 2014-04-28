@@ -59,7 +59,7 @@ class HintBot(GenericIRCBot):
             # dont allow !hint here. at least a little bit of public shaming.
 	    "private": ["!help", "!add", "!del", "!list"],
 	    # only in channels, first word must be the command
-	    "public": ["!help", "!add", "!del", "!list", "!hint"],
+	    "public": ["!add", "!del", "!list", "!hint"],
 	    # only in channels, first word is the name of this bot followed by a colon, second word is the command
 	    "directed": ["!help", "!add", "!del", "!list", "!hint"],
 	}
@@ -186,7 +186,7 @@ class HintBotFactory(GenericIRCBotFactory):
 
 if __name__ == '__main__':
     # create factory protocol and application
-    f = HintBotFactory(HintBot, ["#wargames"], "HintBot", "HintBot v1.0", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
+    f = HintBotFactory(HintBot, ["#wargames"], "HintBot", "HintBot v1.1", "https://github.com/StevenVanAcker/OverTheWire-hintbot")
 
     # connect factory to this host and port
     reactor.connectTCP("irc.overthewire.org", 6667, f)
