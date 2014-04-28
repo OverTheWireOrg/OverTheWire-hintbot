@@ -19,6 +19,7 @@ def log(m, c=""):
 
 class GenericIRCBot(irc.IRCClient):
     DontCheckARGC = -1
+    spamMainChannelWithHelp = False
     commandData = {}
     commands = {
         "private": [],
@@ -132,6 +133,10 @@ class GenericIRCBot(irc.IRCClient):
 
     def handle_HELP(self, msgtype, user, recip, cmd): #{{{
 	self.sendMessage(msgtype, user, recip, "I am %s from %s. Available commands (m=message, c=channel, d=directed):" % (self.getFullname(), self.getURL()))
+	
+	if not self.spamMainChannelWithHelp and msgtype == "public":
+	    return
+	
 	cmds = self.commandData.keys()
 	cmds.sort()
 	for k in cmds:
